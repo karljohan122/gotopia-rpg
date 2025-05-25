@@ -21,7 +21,14 @@ type Monster struct {
 	Description     string
 	HP, AC          int
 	ChallengeRating string
-	// Attacks, spells can be added
+	Attacks         []Attack
+}
+
+type Attack struct {
+	Name        string
+	Desc        string
+	AttackBonus int
+	DamageDice  string
 }
 
 type Item struct {
@@ -45,9 +52,11 @@ type Game struct {
 func NewGame() *Game {
 	return &Game{
 		Player: Player{
-			Stats:     Stats{},
-			Inventory: []Item{},
-			Equipped:  make(map[string]Item),
+			Stats:      Stats{},
+			Inventory:  []Item{},
+			Equipped:   make(map[string]Item),
+			HP:         100, // Set starting HP
+			ArmorClass: 16,  // Set starting AC
 		},
 		CurrentMon: Monster{},
 		Scene:      SceneSpawn,

@@ -15,12 +15,22 @@ type Paginated[T any] struct {
 }
 
 type Monster struct {
-	Name            string `json:"name"`
-	Description     string `json:"desc"`
-	HitPoints       int    `json:"hit_points"`
-	ArmorClass      int    `json:"armor_class"`
-	ChallengeRating string `json:"challenge_rating"`
-	Slug            string `json:"slug"`
+	Name            string   `json:"name"`
+	Description     string   `json:"desc"`
+	HitPoints       int      `json:"hit_points"`
+	ArmorClass      int      `json:"armor_class"`
+	ChallengeRating string   `json:"challenge_rating"`
+	Slug            string   `json:"slug"`
+	Actions         []Action `json:"actions"`
+}
+
+type monsterAttackMsg struct{}
+
+type Action struct {
+	Name        string `json:"name"`
+	Desc        string `json:"desc"`
+	AttackBonus int    `json:"attack_bonus"`
+	DamageDice  string `json:"damage_dice"`
 }
 
 type Equipment struct {
