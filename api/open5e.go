@@ -15,20 +15,18 @@ type Paginated[T any] struct {
 }
 
 type Monster struct {
-	Name            string      `json:"name"`
-	Description     Description `json:"desc"`
-	HitPoints       int         `json:"hit_points"`
-	ArmorClass      int         `json:"armor_class"`
-	ChallengeRating string      `json:"challenge_rating"`
-	Slug            string      `json:"slug"`
+	Name            string `json:"name"`
+	Description     string `json:"desc"`
+	HitPoints       int    `json:"hit_points"`
+	ArmorClass      int    `json:"armor_class"`
+	ChallengeRating string `json:"challenge_rating"`
+	Slug            string `json:"slug"`
 }
 
 type Equipment struct {
 	Name string `json:"name"`
 	Slug string `json:"slug"`
 }
-
-type Description string
 
 func FetchRandomMonster() (*Monster, error) {
 	rand.Seed(time.Now().UnixNano())
@@ -78,20 +76,4 @@ func FetchRandomEquipment() (*Equipment, error) {
 
 	i := rand.Intn(len(equipment.Results))
 	return &equipment.Results[i], nil
-}
-
-func (d *Description) UnmarshalJSON(data []byte) error {
-	// If it's a string, unmarshal as string
-	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
-		*d = Description(s)
-		return nil
-	}
-	// If it's a boolean (false), treat as empty string
-	var b bool
-	if err := json.Unmarshal(data, &b); err == nil && b == false {
-		*d = ""
-		return nil
-	}
-	return fmt.Errorf("invalid description field: %s", string(data))
 }
