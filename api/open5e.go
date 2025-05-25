@@ -40,7 +40,7 @@ type Equipment struct {
 func FetchRandomMonster() (*Monster, error) {
 	rand.Seed(time.Now().UnixNano())
 
-	metaURL := fmt.Sprintf("%s/monsters/?limit=1", BaseURL)
+	metaURL := fmt.Sprintf("%s/monsters/?challenge_rating=1&limit=1", BaseURL)
 	metaResp, err := http.Get(metaURL)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func FetchRandomMonster() (*Monster, error) {
 		return nil, err
 	}
 	if meta.Count == 0 {
-		return nil, fmt.Errorf("no monsters found")
+		return nil, fmt.Errorf("no CR 1 monsters found")
 	}
 
 	pageSize := 20
@@ -60,7 +60,7 @@ func FetchRandomMonster() (*Monster, error) {
 
 	for attempts := 0; attempts < 5; attempts++ {
 		page := rand.Intn(pageCount) + 1
-		url := fmt.Sprintf("%s/monsters/?page=%d", BaseURL, page)
+		url := fmt.Sprintf("%s/monsters/?challenge_rating=1&page=%d", BaseURL, page)
 
 		resp, err := http.Get(url)
 		if err != nil {
@@ -72,9 +72,11 @@ func FetchRandomMonster() (*Monster, error) {
 		if err := json.NewDecoder(resp.Body).Decode(&mons); err != nil {
 			return nil, err
 		}
+
 		rand.Shuffle(len(mons.Results), func(i, j int) {
 			mons.Results[i], mons.Results[j] = mons.Results[j], mons.Results[i]
 		})
+
 		for _, m := range mons.Results {
 			d := m.Description
 			if d != "" && d != "False" {
@@ -83,7 +85,7 @@ func FetchRandomMonster() (*Monster, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no monsters with descriptions found after several attempts")
+	return nil, fmt.Errorf("no CR 1 monster with description found after several attempts")
 }
 
 func FetchRandomEquipment() (*Equipment, error) {
@@ -98,6 +100,7 @@ func FetchRandomEquipment() (*Equipment, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&equipment); err != nil {
 		return nil, err
 	}
+
 	if len(equipment.Results) == 0 {
 		return nil, fmt.Errorf("no equipment found")
 	}
