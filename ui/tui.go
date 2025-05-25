@@ -44,7 +44,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.Game.CurrentMon = model.Monster{
 						Name:            mon.Name,
-						Description:     mon.Description,
+						Description:     string(mon.Description),
 						HP:              mon.HitPoints,
 						AC:              mon.ArmorClass,
 						ChallengeRating: mon.ChallengeRating,
