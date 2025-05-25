@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 type Turn int
@@ -24,6 +25,9 @@ type Model struct {
 	Spinner  spinner.Model
 	Err      error
 	Turn     Turn
+
+	width  int // <─ current terminal width
+	height int // <─ current terminal height
 }
 
 type monsterFetchedMsg struct {
@@ -76,6 +80,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+	case tea.WindowSizeMsg: // <─ remember the new size
+		m.width, m.height = msg.Width, msg.Height
+		return m, nil
 	case monsterFetchedMsg:
 		m.Loading = false
 		if msg.Err != nil {
@@ -133,6 +140,12 @@ func (m Model) View() string {
 	if m.Game.Player.HP <= 0 {
 		return "-- Gotopia RPG -- \nYou died!\nPress q to quit.\n"
 	}
+
+	// fallback width if we never received WindowSizeMsg yet
+	if m.width == 0 {
+		m.width = 80
+	}
+
 	s := "-- Gotopia RPG -- \n"
 	if m.Loading {
 		s += fmt.Sprintf("%s Fetching a monster...\n", m.Spinner.View())
@@ -145,19 +158,22 @@ func (m Model) View() string {
 	case model.SceneSpawn:
 		s += "Press [n] to start battle\n"
 	case model.SceneBattle:
-		if m.Game.CurrentMon.Description != "" && m.Game.CurrentMon.Description != "False" {
-			s += fmt.Sprintf("Description: %s\n \n", m.Game.CurrentMon.Description)
-		} else {
-			s += "Description: No description available.\n \n"
+		desc := m.Game.CurrentMon.Description
+		if desc == "" || desc == "False" {
+			desc = "No description available."
 		}
+		descWrapped := wordwrap.String(desc, max(10, m.width-2))
+		s += fmt.Sprintf("Description:\n%s\n\n", descWrapped)
+
 		s += fmt.Sprintf("Enemy: %s\n", m.Game.CurrentMon.Name)
-		s += fmt.Sprintf("Enemy HP:%d AC:%d\n \n", m.Game.CurrentMon.HP, m.Game.CurrentMon.AC)
-		s += fmt.Sprintf("Turn: %s\n \n", map[Turn]string{PlayerTurn: "Player", MonsterTurn: "Monster"}[m.Turn])
+		s += fmt.Sprintf("Enemy HP:%d AC:%d\n\n", m.Game.CurrentMon.HP, m.Game.CurrentMon.AC)
+		s += fmt.Sprintf("Turn: %s\n\n", map[Turn]string{PlayerTurn: "Player", MonsterTurn: "Monster"}[m.Turn])
+		s += fmt.Sprintf("Player race: %s\n", m.Game.Player.Race)
 		s += fmt.Sprintf("Player HP:%d AC:%d\n", m.Game.Player.HP, m.Game.Player.ArmorClass)
+
 		if m.Turn == PlayerTurn {
 			s += "[1] Attack  [q] Quit"
 		} else {
-			// Optionally show monster's attack
 			if len(m.Game.CurrentMon.Attacks) > 0 {
 				s += fmt.Sprintf("Monster uses %s!\n", m.Game.CurrentMon.Attacks[0].Name)
 			} else {
@@ -189,4 +205,11 @@ func monsterAttackCmd() tea.Cmd {
 	return tea.Tick(time.Second/2, func(t time.Time) tea.Msg {
 		return monsterAttackMsg{}
 	})
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
