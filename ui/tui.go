@@ -70,18 +70,18 @@ func (m Model) View() string {
 	if m.Quitting {
 		return "Goodbye\n"
 	}
-	s := "-- Gotopia RPG -- \n"
+	s := "-- Gotopia RPG -- \n\n"
 	switch m.Game.Scene {
 	case model.SceneSpawn:
 		s += "Press [n] to start battle\n"
 	case model.SceneBattle:
-		s += fmt.Sprintf("Enemy: %s\n", m.Game.CurrentMon.Name)
+		s += fmt.Sprintf("Enemy: %s\n\n", m.Game.CurrentMon.Name)
 		if m.Game.CurrentMon.Description != "" {
-			s += fmt.Sprintf("Description: %s\n", m.Game.CurrentMon.Description)
+			s += fmt.Sprintf("Description: %s\n\n", m.Game.CurrentMon.Description)
 		} else {
-			s += "Description: No description available.\n"
+			s += "Description: No description available.\n\n"
 		}
-		s += fmt.Sprintf("HP:%d AC:%d\n", m.Game.CurrentMon.HP, m.Game.CurrentMon.AC)
+		s += fmt.Sprintf("HP:%d AC:%d\n\n", m.Game.CurrentMon.HP, m.Game.CurrentMon.AC)
 		s += "[1] Attack  [q] Quit"
 	}
 	return s

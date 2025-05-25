@@ -31,7 +31,7 @@ type Equipment struct {
 func FetchRandomMonster() (*Monster, error) {
 	rand.Seed(time.Now().UnixNano())
 	for attempts := 0; attempts < 5; attempts++ {
-		url := fmt.Sprintf("%s/monsters/?limit=100&offset=%d", BaseURL, rand.Intn(32)*100)
+		url := fmt.Sprintf("%s/monsters/?offset=%d", BaseURL, rand.Intn(32)*100)
 		resp, err := http.Get(url)
 		if err != nil {
 			return nil, err
