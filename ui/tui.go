@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gotopia-rpg/api"
 	"gotopia-rpg/model"
+	"math/rand"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -21,18 +22,18 @@ const (
 const maxHP = 100
 
 type Model struct {
-	Game     *model.Game
-	Quitting bool
-	Loading  bool
-	Spinner  spinner.Model
-	Err      error
-	Turn     Turn
-	Message  string
-	restUsed bool
-	Level    int
-
-	width  int
-	height int
+	Game          *model.Game
+	Quitting      bool
+	Loading       bool
+	Spinner       spinner.Model
+	Err           error
+	Turn          Turn
+	Message       string // general message (resting, etc.)
+	PlayerAction  string // latest player attack message
+	MonsterAction string // latest monster attack message
+	restUsed      bool
+	Level         int
+	width, height int
 }
 
 type monsterFetchedMsg struct {
@@ -43,6 +44,7 @@ type monsterFetchedMsg struct {
 type monsterAttackMsg struct{}
 
 func NewModel(g *model.Game) Model {
+	rand.Seed(time.Now().UnixNano())
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	return Model{Game: g, Spinner: s}
@@ -53,9 +55,11 @@ func (m Model) Init() tea.Cmd { return nil }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	switch msg := msg.(type) {
+	switch v := msg.(type) {
+
 	case tea.KeyMsg:
-		switch msg.String() {
+		switch v.String() {
+
 		case "q", "ctrl+c":
 			m.Quitting = true
 			return m, tea.Quit
@@ -68,6 +72,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Loading = true
 				m.Err = nil
 				m.Message = ""
+				m.PlayerAction = ""
+				m.MonsterAction = ""
 				m.Turn = PlayerTurn
 				cmds = append(cmds, fetchMonsterCmd(), m.Spinner.Tick)
 				return m, tea.Batch(cmds...)
@@ -88,14 +94,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "1":
-			if m.Game.Scene == model.SceneBattle && m.Turn == PlayerTurn &&
-				m.Game.CurrentMon.HP > 0 && m.Game.Player.HP > 0 {
+			if m.Game.Scene == model.SceneBattle &&
+				m.Turn == PlayerTurn &&
+				m.Game.CurrentMon.HP > 0 &&
+				m.Game.Player.HP > 0 {
 
-				m.Game.CurrentMon.HP -= 3
+				damage := rand.Intn(9) // 0–8 (0 means miss)
+
+				if damage == 0 {
+					m.PlayerAction = fmt.Sprintf("You miss %s!", m.Game.CurrentMon.Name)
+				} else {
+					m.Game.CurrentMon.HP -= damage
+					m.PlayerAction = fmt.Sprintf("You hit %s for %d damage!", m.Game.CurrentMon.Name, damage)
+				}
+
 				if m.Game.CurrentMon.HP <= 0 {
 					m.Game.CurrentMon.HP = 0
 					m.Level++
-					m.Message = fmt.Sprintf("You have slain %s!", m.Game.CurrentMon.Name)
+					m.PlayerAction = fmt.Sprintf("You have slain %s!", m.Game.CurrentMon.Name)
 					m.Game.Scene = model.SceneSpawn
 					m.Turn = PlayerTurn
 					m.restUsed = false
@@ -109,33 +125,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
+		m.width, m.height = v.Width, v.Height
 		return m, nil
 
 	case monsterFetchedMsg:
 		m.Loading = false
 		m.Message = ""
-		if msg.Err != nil {
-			m.Err = msg.Err
+		if v.Err != nil {
+			m.Err = v.Err
 			m.Game.Scene = model.SceneSpawn
 		} else {
-			m.Game.CurrentMon = msg.Monster
+			m.Game.CurrentMon = v.Monster
 			m.Game.Scene = model.SceneBattle
 			m.Err = nil
 			m.Turn = PlayerTurn
 		}
 
 	case monsterAttackMsg:
-		if m.Game.Scene == model.SceneBattle && m.Turn == MonsterTurn &&
-			m.Game.CurrentMon.HP > 0 && m.Game.Player.HP > 0 {
+		if m.Game.Scene == model.SceneBattle &&
+			m.Turn == MonsterTurn &&
+			m.Game.CurrentMon.HP > 0 &&
+			m.Game.Player.HP > 0 {
 
-			m.Game.Player.HP -= 3
+			damage := rand.Intn(9) // 0–8
+
+			if damage == 0 {
+				m.MonsterAction = fmt.Sprintf("%s misses you!", m.Game.CurrentMon.Name)
+			} else {
+				m.Game.Player.HP -= damage
+				m.MonsterAction = fmt.Sprintf("%s hits you for %d damage!", m.Game.CurrentMon.Name, damage)
+			}
+
 			if m.Game.Player.HP <= 0 {
 				m.Game.Player.HP = 0
 				m.Game.Scene = model.SceneSpawn
-				m.Message = "You died!"
+				m.MonsterAction = "You died!"
 				m.restUsed = false
-				m.Level = 0 // reset level on death
+				m.Level = 0
 			}
 			m.Turn = PlayerTurn
 		}
@@ -143,7 +169,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		if m.Loading {
 			var cmd tea.Cmd
-			m.Spinner, cmd = m.Spinner.Update(msg)
+			m.Spinner, cmd = m.Spinner.Update(v)
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -171,7 +197,8 @@ func (m Model) View() string {
 
 	s := header
 
-	if m.Message != "" {
+	// Spawn scene messages (resting, errors, etc.)
+	if m.Game.Scene == model.SceneSpawn && m.Message != "" {
 		s += wordwrap.String(m.Message, max(10, m.width-2)) + "\n\n"
 	}
 
@@ -184,6 +211,7 @@ func (m Model) View() string {
 	}
 
 	switch m.Game.Scene {
+
 	case model.SceneSpawn:
 		s += fmt.Sprintf("Player HP:%d AC:%d\n\n", m.Game.Player.HP, m.Game.Player.ArmorClass)
 		s += "[n] Next battle\n"
@@ -197,12 +225,22 @@ func (m Model) View() string {
 		if desc == "" || desc == "False" {
 			desc = "No description available."
 		}
-		descWrapped := wordwrap.String(desc, max(10, m.width-2))
-		s += fmt.Sprintf("Description:\n%s\n\n", descWrapped)
+		s += fmt.Sprintf("Description:\n%s\n\n", wordwrap.String(desc, max(10, m.width-2)))
 
 		s += fmt.Sprintf("Enemy: %s\n", m.Game.CurrentMon.Name)
 		s += fmt.Sprintf("Enemy HP:%d AC:%d\n\n", m.Game.CurrentMon.HP, m.Game.CurrentMon.AC)
 		s += fmt.Sprintf("Turn: %s\n\n", map[Turn]string{PlayerTurn: "Player", MonsterTurn: "Monster"}[m.Turn])
+
+		if m.MonsterAction != "" {
+			s += wordwrap.String(m.MonsterAction, max(10, m.width-2)) + "\n"
+		}
+		if m.PlayerAction != "" {
+			s += wordwrap.String(m.PlayerAction, max(10, m.width-2)) + "\n"
+		}
+		if m.MonsterAction != "" || m.PlayerAction != "" {
+			s += "\n"
+		}
+
 		s += fmt.Sprintf("Player HP:%d AC:%d\n", m.Game.Player.HP, m.Game.Player.ArmorClass)
 
 		if m.Turn == PlayerTurn {
