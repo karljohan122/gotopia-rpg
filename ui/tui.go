@@ -183,7 +183,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// check if player died
 			if m.Game.Player.HP <= 0 {
 				m.Game.Player.HP = 0
-				m.MonsterAction = "You died!"
+
+				levelOnDeath := m.Level
+				m.MonsterAction = fmt.Sprintf("You died at Level %d!", levelOnDeath)
 
 				// show on spawn screen
 				m.Message = m.MonsterAction

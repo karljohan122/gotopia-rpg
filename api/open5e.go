@@ -40,7 +40,7 @@ type Equipment struct {
 func FetchRandomMonster() (*Monster, error) {
 	rand.Seed(time.Now().UnixNano())
 
-	metaURL := fmt.Sprintf("%s/monsters/?challenge_rating=1&limit=1", BaseURL)
+	metaURL := fmt.Sprintf("%s/monsters/?challenge_rating=1&armor_class__lte=16&limit=1", BaseURL)
 	metaResp, err := http.Get(metaURL)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func FetchRandomMonster() (*Monster, error) {
 
 	for attempts := 0; attempts < 5; attempts++ {
 		page := rand.Intn(pageCount) + 1
-		url := fmt.Sprintf("%s/monsters/?challenge_rating=1&page=%d", BaseURL, page)
+		url := fmt.Sprintf("%s/monsters/?challenge_rating=1&armor_class__lte=16&page=%d", BaseURL, page)
 
 		resp, err := http.Get(url)
 		if err != nil {
