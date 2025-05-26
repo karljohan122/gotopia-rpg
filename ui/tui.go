@@ -52,12 +52,25 @@ func NewModel(g *model.Game) Model {
 
 func (m Model) Init() tea.Cmd { return nil }
 
+// rollDamage returns a random damage value taking AC into account.
+// Base maximum is eight; for each point the attacker’s AC exceeds
+// the defender’s AC, the maximum damage increases by two.
+func rollDamage(attackerAC, defenderAC int) int {
+	baseMax := 8
+	diff := attackerAC - defenderAC
+	if diff > 0 {
+		baseMax += diff * 2
+	}
+	return rand.Intn(baseMax + 1) // range 0..baseMax
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch v := msg.(type) {
 
 	case tea.KeyMsg:
+
 		switch v.String() {
 
 		case "q", "ctrl+c":
@@ -99,7 +112,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Game.CurrentMon.HP > 0 &&
 				m.Game.Player.HP > 0 {
 
-				damage := rand.Intn(9) // 0–8 (0 means miss)
+				damage := rollDamage(m.Game.Player.ArmorClass, m.Game.CurrentMon.AC)
 
 				if damage == 0 {
 					m.PlayerAction = fmt.Sprintf("You miss %s!", m.Game.CurrentMon.Name)
@@ -147,7 +160,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Game.CurrentMon.HP > 0 &&
 			m.Game.Player.HP > 0 {
 
-			damage := rand.Intn(9) // 0–8
+			damage := rollDamage(m.Game.CurrentMon.AC, m.Game.Player.ArmorClass)
 
 			if damage == 0 {
 				m.MonsterAction = fmt.Sprintf("%s misses you!", m.Game.CurrentMon.Name)
@@ -231,6 +244,7 @@ func (m Model) View() string {
 		s += fmt.Sprintf("Enemy HP:%d AC:%d\n\n", m.Game.CurrentMon.HP, m.Game.CurrentMon.AC)
 		s += fmt.Sprintf("Turn: %s\n\n", map[Turn]string{PlayerTurn: "Player", MonsterTurn: "Monster"}[m.Turn])
 
+		// Show latest monster action first, then player action
 		if m.MonsterAction != "" {
 			s += wordwrap.String(m.MonsterAction, max(10, m.width-2)) + "\n"
 		}
