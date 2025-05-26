@@ -31,6 +31,7 @@ type Model struct {
 	Message       string // general message (resting, kill, death, etc.)
 	PlayerAction  string // latest player attack message
 	MonsterAction string // latest monster attack message
+	fetchAttempts int    // how many consecutive fetch attempts made
 	restUsed      bool
 	Level         int
 	width, height int
@@ -43,6 +44,7 @@ type monsterFetchedMsg struct {
 
 type monsterAttackMsg struct{}
 
+// NewModel creates a new Bubble Tea model for the TUI.
 func NewModel(g *model.Game) Model {
 	rand.Seed(time.Now().UnixNano())
 	s := spinner.New()
@@ -78,6 +80,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "q":
+			// Quit on spawn screen, give up (return to spawn) in combat.
 			if m.Game.Scene == model.SceneBattle {
 				m.Game.Scene = model.SceneSpawn
 				m.Game.Player.HP = maxHP
@@ -87,13 +90,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Turn = PlayerTurn
 				m.restUsed = false
 				m.Level = 0
+				m.fetchAttempts = 0
 				return m, nil
 			}
 			m.Quitting = true
 			return m, tea.Quit
 
 		case "n":
-			// start a new battle from the spawn scene
+			// Start a new battle from the spawn scene.
 			if m.Game.Scene == model.SceneSpawn && !m.Loading {
 				if m.Game.Player.HP <= 0 {
 					m.Game.Player.HP = maxHP
@@ -104,12 +108,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.PlayerAction = ""
 				m.MonsterAction = ""
 				m.Turn = PlayerTurn
+				m.fetchAttempts = 1
 				cmds = append(cmds, fetchMonsterCmd(), m.Spinner.Tick)
 				return m, tea.Batch(cmds...)
 			}
 
 		case "r":
-			// rest to heal in spawn scene
+			// Rest to heal in spawn scene.
 			if m.Game.Scene == model.SceneSpawn && !m.Loading &&
 				!m.restUsed && m.Game.Player.HP > 0 && m.Game.Player.HP < maxHP {
 
@@ -124,7 +129,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "1":
-			// player attack
+			// Player attack during battle.
 			if m.Game.Scene == model.SceneBattle &&
 				m.Turn == PlayerTurn &&
 				m.Game.CurrentMon.HP > 0 &&
@@ -139,13 +144,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.PlayerAction = fmt.Sprintf("You hit %s for %d damage!", m.Game.CurrentMon.Name, damage)
 				}
 
-				// check if monster died
+				// Check if the monster died.
 				if m.Game.CurrentMon.HP <= 0 {
 					m.Game.CurrentMon.HP = 0
 					m.Level++
 					m.PlayerAction = fmt.Sprintf("You have slain %s!", m.Game.CurrentMon.Name)
 
-					// put the kill-message into the spawn-scene banner
+					// Put the kill-message into the spawn-scene banner.
 					m.Message = m.PlayerAction
 					m.PlayerAction = ""
 					m.MonsterAction = ""
@@ -156,7 +161,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-				// monster’s turn next
+				// Monster’s turn next.
 				m.Turn = MonsterTurn
 				cmds = append(cmds, monsterAttackCmd())
 				return m, tea.Batch(cmds...)
@@ -168,19 +173,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case monsterFetchedMsg:
-		m.Loading = false
-		m.Message = ""
 		if v.Err != nil {
-			m.Err = v.Err
-			m.Game.Scene = model.SceneSpawn
-		} else {
-			m.Game.CurrentMon = v.Monster
-			m.Game.Scene = model.SceneBattle
-			m.Err = nil
-			m.Turn = PlayerTurn
+			// Fetch failed: keep loading and retry silently.
+			m.fetchAttempts++
+			cmds = append(cmds, fetchMonsterCmd())
+			return m, tea.Batch(cmds...)
 		}
 
+		// Fetch succeeded.
+		m.Loading = false
+		m.Message = ""
+		m.Game.CurrentMon = v.Monster
+		m.Game.Scene = model.SceneBattle
+		m.Err = nil
+		m.Turn = PlayerTurn
+		m.fetchAttempts = 0
+
 	case monsterAttackMsg:
+		// Monster attacks if in battle and it is the monster’s turn.
 		if m.Game.Scene == model.SceneBattle &&
 			m.Turn == MonsterTurn &&
 			m.Game.CurrentMon.HP > 0 &&
@@ -195,14 +205,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.MonsterAction = fmt.Sprintf("%s hits you for %d damage!", m.Game.CurrentMon.Name, damage)
 			}
 
-			// check if player died
+			// Check if the player died.
 			if m.Game.Player.HP <= 0 {
 				m.Game.Player.HP = 0
 
 				levelOnDeath := m.Level
 				m.MonsterAction = fmt.Sprintf("You died at Level %d!", levelOnDeath)
 
-				// show on spawn screen
+				// Show on spawn screen.
 				m.Message = m.MonsterAction
 				m.PlayerAction = ""
 				m.MonsterAction = ""
@@ -215,6 +225,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case spinner.TickMsg:
+		// Update the spinner while loading.
 		if m.Loading {
 			var cmd tea.Cmd
 			m.Spinner, cmd = m.Spinner.Update(v)
@@ -245,17 +256,18 @@ func (m Model) View() string {
 
 	s := header
 
-	// Spawn scene messages (resting, kill, death, errors, etc.)
+	// Spawn-scene messages (resting, kill, death, errors, etc.).
 	if m.Game.Scene == model.SceneSpawn && m.Message != "" {
 		s += wordwrap.String(m.Message, max(10, m.width-2)) + "\n\n"
 	}
 
 	if m.Loading {
-		s += fmt.Sprintf("%s Fetching a monster...\n", m.Spinner.View())
+		fetchText := "Fetching a monster..."
+		if m.fetchAttempts > 1 {
+			fetchText = "Still fetching a monster..."
+		}
+		s += fmt.Sprintf("%s %s\n", m.Spinner.View(), fetchText)
 		return s
-	}
-	if m.Err != nil {
-		s += fmt.Sprintf("Error: %v\n", m.Err)
 	}
 
 	switch m.Game.Scene {
@@ -278,7 +290,7 @@ func (m Model) View() string {
 		s += fmt.Sprintf("Enemy HP:%d AC:%d\n\n", m.Game.CurrentMon.HP, m.Game.CurrentMon.AC)
 		s += fmt.Sprintf("Turn: %s\n\n", map[Turn]string{PlayerTurn: "Player", MonsterTurn: "Monster"}[m.Turn])
 
-		// Show latest monster action first, then player action
+		// Show latest monster action first, then player action.
 		if m.MonsterAction != "" {
 			s += wordwrap.String(m.MonsterAction, max(10, m.width-2)) + "\n"
 		}
@@ -304,6 +316,7 @@ func (m Model) View() string {
 	return s
 }
 
+// fetchMonsterCmd gets a random monster from the Open5e API.
 func fetchMonsterCmd() tea.Cmd {
 	return func() tea.Msg {
 		mon, err := api.FetchRandomMonster()
@@ -321,12 +334,14 @@ func fetchMonsterCmd() tea.Cmd {
 	}
 }
 
+// monsterAttackCmd waits briefly and then returns a message indicating the monster attacks.
 func monsterAttackCmd() tea.Cmd {
 	return tea.Tick(200*time.Millisecond, func(t time.Time) tea.Msg {
 		return monsterAttackMsg{}
 	})
 }
 
+// max returns the larger of two ints.
 func max(a, b int) int {
 	if a > b {
 		return a
