@@ -86,6 +86,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.MonsterAction = ""
 				m.Turn = PlayerTurn
 				m.restUsed = false
+				m.Level = 0
 				return m, nil
 			}
 			m.Quitting = true
