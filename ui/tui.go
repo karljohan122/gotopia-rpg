@@ -73,7 +73,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch v.String() {
 
-		case "q", "ctrl+c":
+		case "ctrl+c":
+			m.Quitting = true
+			return m, tea.Quit
+
+		case "q":
+			if m.Game.Scene == model.SceneBattle {
+				m.Game.Scene = model.SceneSpawn
+				m.Game.Player.HP = maxHP
+				m.Message = "You gave up and returned to safety."
+				m.PlayerAction = ""
+				m.MonsterAction = ""
+				m.Turn = PlayerTurn
+				m.restUsed = false
+				return m, nil
+			}
 			m.Quitting = true
 			return m, tea.Quit
 
@@ -277,7 +291,7 @@ func (m Model) View() string {
 		s += fmt.Sprintf("Player HP:%d AC:%d\n", m.Game.Player.HP, m.Game.Player.ArmorClass)
 
 		if m.Turn == PlayerTurn {
-			s += "[1] Attack  [q] Quit"
+			s += "[1] Attack  [q] Give up"
 		} else {
 			if len(m.Game.CurrentMon.Attacks) > 0 {
 				s += fmt.Sprintf("Monster uses %s!\n", m.Game.CurrentMon.Attacks[0].Name)
