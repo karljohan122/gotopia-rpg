@@ -29,6 +29,7 @@ type Model struct {
 	Turn     Turn
 	Message  string
 	restUsed bool
+	Level    int
 
 	width  int
 	height int
@@ -55,14 +56,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-
 		case "q", "ctrl+c":
 			m.Quitting = true
 			return m, tea.Quit
 
 		case "n":
 			if m.Game.Scene == model.SceneSpawn && !m.Loading {
-				if m.Game.Player.HP <= 0 { // revive player after death
+				if m.Game.Player.HP <= 0 {
 					m.Game.Player.HP = maxHP
 				}
 				m.Loading = true
@@ -94,6 +94,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Game.CurrentMon.HP -= 3
 				if m.Game.CurrentMon.HP <= 0 {
 					m.Game.CurrentMon.HP = 0
+					m.Level++
 					m.Message = fmt.Sprintf("You have slain %s!", m.Game.CurrentMon.Name)
 					m.Game.Scene = model.SceneSpawn
 					m.Turn = PlayerTurn
@@ -134,6 +135,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Game.Scene = model.SceneSpawn
 				m.Message = "You died!"
 				m.restUsed = false
+				m.Level = 0 // reset level on death
 			}
 			m.Turn = PlayerTurn
 		}
@@ -161,7 +163,13 @@ func (m Model) View() string {
 		m.width = 80
 	}
 
-	s := "-- Gotopia RPG -- \n"
+	header := "-- Gotopia RPG"
+	if m.Level > 0 {
+		header += fmt.Sprintf(" - Level %d", m.Level)
+	}
+	header += " -- \n"
+
+	s := header
 
 	if m.Message != "" {
 		s += wordwrap.String(m.Message, max(10, m.width-2)) + "\n\n"
