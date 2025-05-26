@@ -28,7 +28,7 @@ type Model struct {
 	Spinner       spinner.Model
 	Err           error
 	Turn          Turn
-	Message       string // general message (resting, etc.)
+	Message       string // general message (resting, kill, death, etc.)
 	PlayerAction  string // latest player attack message
 	MonsterAction string // latest monster attack message
 	restUsed      bool
@@ -61,7 +61,7 @@ func rollDamage(attackerAC, defenderAC int) int {
 	if diff > 0 {
 		baseMax += diff * 2
 	}
-	return rand.Intn(baseMax + 1) // range 0..baseMax
+	return rand.Intn(baseMax + 1) // range 0..baseMax (0 means miss)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -78,6 +78,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "n":
+			// start a new battle from the spawn scene
 			if m.Game.Scene == model.SceneSpawn && !m.Loading {
 				if m.Game.Player.HP <= 0 {
 					m.Game.Player.HP = maxHP
@@ -93,6 +94,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "r":
+			// rest to heal in spawn scene
 			if m.Game.Scene == model.SceneSpawn && !m.Loading &&
 				!m.restUsed && m.Game.Player.HP > 0 && m.Game.Player.HP < maxHP {
 
@@ -107,6 +109,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "1":
+			// player attack
 			if m.Game.Scene == model.SceneBattle &&
 				m.Turn == PlayerTurn &&
 				m.Game.CurrentMon.HP > 0 &&
@@ -121,16 +124,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.PlayerAction = fmt.Sprintf("You hit %s for %d damage!", m.Game.CurrentMon.Name, damage)
 				}
 
+				// check if monster died
 				if m.Game.CurrentMon.HP <= 0 {
 					m.Game.CurrentMon.HP = 0
 					m.Level++
 					m.PlayerAction = fmt.Sprintf("You have slain %s!", m.Game.CurrentMon.Name)
+
+					// put the kill-message into the spawn-scene banner
+					m.Message = m.PlayerAction
+					m.PlayerAction = ""
+					m.MonsterAction = ""
+
 					m.Game.Scene = model.SceneSpawn
 					m.Turn = PlayerTurn
 					m.restUsed = false
 					return m, nil
 				}
 
+				// monster’s turn next
 				m.Turn = MonsterTurn
 				cmds = append(cmds, monsterAttackCmd())
 				return m, tea.Batch(cmds...)
@@ -169,10 +180,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.MonsterAction = fmt.Sprintf("%s hits you for %d damage!", m.Game.CurrentMon.Name, damage)
 			}
 
+			// check if player died
 			if m.Game.Player.HP <= 0 {
 				m.Game.Player.HP = 0
-				m.Game.Scene = model.SceneSpawn
 				m.MonsterAction = "You died!"
+
+				// show on spawn screen
+				m.Message = m.MonsterAction
+				m.PlayerAction = ""
+				m.MonsterAction = ""
+
+				m.Game.Scene = model.SceneSpawn
 				m.restUsed = false
 				m.Level = 0
 			}
@@ -210,7 +228,7 @@ func (m Model) View() string {
 
 	s := header
 
-	// Spawn scene messages (resting, errors, etc.)
+	// Spawn scene messages (resting, kill, death, errors, etc.)
 	if m.Game.Scene == model.SceneSpawn && m.Message != "" {
 		s += wordwrap.String(m.Message, max(10, m.width-2)) + "\n\n"
 	}
@@ -224,7 +242,6 @@ func (m Model) View() string {
 	}
 
 	switch m.Game.Scene {
-
 	case model.SceneSpawn:
 		s += fmt.Sprintf("Player HP:%d AC:%d\n\n", m.Game.Player.HP, m.Game.Player.ArmorClass)
 		s += "[n] Next battle\n"
